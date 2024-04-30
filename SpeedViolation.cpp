@@ -162,7 +162,7 @@ class EuclideanDistTracker
 
 int main() 
 {
-  VideoCapture cap("demo.mp4");
+  VideoCapture cap("carsVideo.mp4");
   if (!cap.isOpened()) 
   {
     cout << "Error opening video stream or file" << endl;
