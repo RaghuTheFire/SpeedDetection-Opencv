@@ -156,3 +156,126 @@ class EuclideanDistTracker
     file << "Exceeded speed limit :\t" << exceeded << "\n";
   }
 };
+
+
+int main() 
+{
+  VideoCapture cap("demo.mp4");
+  if (!cap.isOpened()) 
+  {
+    cout << "Error opening video stream or file" << endl;
+    return -1;
+  }
+
+  EuclideanDistTracker tracker;
+
+  Ptr < BackgroundSubtractorMOG2 > object_detector = createBackgroundSubtractorMOG2();
+  Ptr < BackgroundSubtractorMOG2 > fgbg = createBackgroundSubtractorMOG2(true);
+
+  Mat kernel_op = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1, -1));
+  Mat kernel_op2 = getStructuringElement(MORPH_RECT, Size(5, 5), Point(-1, -1));
+  Mat kernel_cl = getStructuringElement(MORPH_RECT, Size(11, 11), Point(-1, -1));
+  Mat kernel_e = getStructuringElement(MORPH_RECT, Size(5, 5), Point(-1, -1));
+
+  int f = 25;
+  int w = int(1000 / (f - 1));
+
+  while (true) 
+  {
+    Mat frame;
+    cap >> frame;
+    if (frame.empty()) 
+    {
+      break;
+    }
+
+    resize(frame, frame, Size(), 0.5, 0.5);
+    int height = frame.rows;
+    int width = frame.cols;
+
+    Mat roi = frame(Rect(200, 50, 760, 490));
+
+    Mat mask;
+    object_detector -> apply(roi, mask);
+    threshold(mask, mask, 250, 255, THRESH_BINARY);
+
+    Mat fgmask;
+    fgbg -> apply(roi, fgmask);
+    Mat imBin;
+    threshold(fgmask, imBin, 200, 255, THRESH_BINARY);
+    Mat mask1;
+    morphologyEx(imBin, mask1, MORPH_OPEN, kernel_op);
+    Mat mask2;
+    morphologyEx(mask1, mask2, MORPH_CLOSE, kernel_cl);
+    Mat e_img;
+    erode(mask2, e_img, kernel_e);
+
+    vector < vector < float >> detections;
+    vector < vector < Point >> contours;
+    findContours(e_img, contours, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    for (size_t i = 0; i < contours.size(); i++) 
+    {
+      double area = contourArea(contours[i]);
+      if (area > 1000) 
+      {
+        Rect rect = boundingRect(contours[i]);
+        detections.push_back({
+          static_cast < float > (rect.x),
+          static_cast < float > (rect.y),
+          static_cast < float > (rect.width),
+          static_cast < float > (rect.height)
+        });
+        rectangle(roi, rect, Scalar(0, 255, 0), 3);
+      }
+    }
+
+    vector < vector < float >> boxes_ids = tracker.update(detections);
+    for (size_t i = 0; i < boxes_ids.size(); i++) 
+    {
+      int x = static_cast < int > (boxes_ids[i][0]);
+      int y = static_cast < int > (boxes_ids[i][1]);
+      int w = static_cast < int > (boxes_ids[i][2]);
+      int h = static_cast < int > (boxes_ids[i][3]);
+      int id = static_cast < int > (boxes_ids[i][4]);
+
+      if (tracker.getsp(id) < tracker.limit()) 
+      {
+        putText(roi, to_string(id) + " " + to_string(tracker.getsp(id)), Point(x, y - 15), FONT_HERSHEY_PLAIN, 1, Scalar(255, 255, 0), 2);
+        rectangle(roi, Rect(x, y, w, h), Scalar(0, 255, 0), 3);
+      } 
+      else 
+      {
+        putText(roi, to_string(id) + " " + to_string(tracker.getsp(id)), Point(x, y - 15), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255), 2);
+        rectangle(roi, Rect(x, y, w, h), Scalar(0, 165, 255), 3);
+      }
+
+      int s = tracker.getsp(id);
+      if (s != 0) 
+      {
+        tracker.capture(roi, x, y, h, w, s, id);
+      }
+    }
+
+    line(roi, Point(0, 410), Point(960, 410), Scalar(0, 0, 255), 2);
+    line(roi, Point(0, 430), Point(960, 430), Scalar(0, 0, 255), 2);
+    line(roi, Point(0, 235), Point(960, 235), Scalar(0, 0, 255), 2);
+    line(roi, Point(0, 255), Point(960, 255), Scalar(0, 0, 255), 2);
+
+    imshow("Mask", mask2);
+    imshow("Erode", e_img);
+    imshow("ROI", roi);
+
+    int key = waitKey(w - 10);
+    if (key == 27) 
+    {
+      tracker.end();
+      break;
+    }
+  }
+
+  cap.release();
+  destroyAllWindows();
+
+  return 0;
+}
