@@ -1,4 +1,6 @@
 #include <opencv2/opencv.hpp>
+#include <opencv2/tracking.hpp>
+#include <opencv2/core/ocl.hpp>
 #include <cmath>
 #include <ctime>
 #include <vector>
